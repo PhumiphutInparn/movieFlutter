@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'http_helper.dart';
 import 'movie.dart';
 import 'movie_detail.dart';
-import 'movie_search.dart'; 
 
 class MovieList extends StatefulWidget {
   const MovieList({super.key});
@@ -14,11 +14,7 @@ class MovieList extends StatefulWidget {
 class _MovieListState extends State<MovieList> {
   HttpHelper? helper;
   List<Movie>? movies;
-  int? moviesCount;
-  int _selectedIndex = 0; // ตัวแปรเก็บว่าเลือกเมนูไหนอยู่
-
-  final String iconBase = 'https://image.tmdb.org/t/p/w92/';
-  final String defaultImage = 'https://images.freeimages.com/images/large-previews/5eb/movie-clapboard-1184339.jpg';
+  int _selectedIndex = 0;
 
   @override
   void initState() {
@@ -27,65 +23,62 @@ class _MovieListState extends State<MovieList> {
     super.initState();
   }
 
-  // ฟังก์ชันดึงข้อมูลที่ฉลาดขึ้น เลือกได้ว่าจะเอาหนังอะไร
   Future<void> initialize() async {
+    List<Movie>? result;
     if (_selectedIndex == 0) {
-      movies = await helper?.getUpcoming(); // เมนูแรก: หนังใหม่
+      result = await helper?.getUpcoming();
     } else {
-      movies = await helper?.getTopRated(); // เมนูสอง: หนังดัง
+      result = await helper?.getTopRated();
     }
     setState(() {
-      moviesCount = movies?.length;
+      movies = result;
     });
   }
 
-  // ฟังก์ชันเมื่อกดเปลี่ยนเมนู
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
-    initialize(); // โหลดข้อมูลใหม่ทันที
+    initialize();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_selectedIndex == 0 ? 'Upcoming Movies' : 'Top Rated Movies'), // เปลี่ยนชื่อหัวข้อตามเมนู
+        title: Text(_selectedIndex == 0 ? 'Upcoming Movies' : 'Top Rated'),
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
-              showSearch(context: context, delegate: MovieSearch());
+              showSearch(context: context, delegate: MovieSearchDelegate());
             },
           )
         ],
       ),
-      // เพิ่ม RefreshIndicator ครอบ ListView เพื่อให้ดึงจอลงมาแล้วโหลดใหม่ได้
       body: RefreshIndicator(
         onRefresh: initialize,
-        child: (moviesCount == null)
+        child: (movies == null)
             ? const Center(child: CircularProgressIndicator())
             : ListView.builder(
-                itemCount: moviesCount,
+                itemCount: movies!.length,
                 itemBuilder: (BuildContext context, int position) {
-                  NetworkImage image;
-                  if (movies![position].posterPath != null) {
-                    image = NetworkImage(iconBase + movies![position].posterPath!);
-                  } else {
-                    image = NetworkImage(defaultImage);
-                  }
-        
                   return Card(
                     color: Colors.white,
                     elevation: 2.0,
                     child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundImage: image,
+                      leading: Hero(
+                        tag: movies![position].id.toString(),
+                        child: CircleAvatar(
+                          backgroundColor: Colors.grey[200],
+                          backgroundImage: (movies![position].posterPath != null)
+                              ? CachedNetworkImageProvider('https://image.tmdb.org/t/p/w92${movies![position].posterPath}')
+                              : null,
+                          child: (movies![position].posterPath == null) ? const Icon(Icons.movie) : null,
+                        ),
                       ),
                       title: Text(movies![position].title ?? ""),
-                      subtitle: Text(
-                          'Released: ${movies![position].releaseDate} - Vote: ${movies![position].voteAverage}'),
+                      subtitle: Text('Rating: ${movies![position].voteAverage}'),
                       onTap: () {
                         MaterialPageRoute route = MaterialPageRoute(
                             builder: (_) => MovieDetail(movies![position]));
@@ -96,17 +89,10 @@ class _MovieListState extends State<MovieList> {
                 },
               ),
       ),
-      // แถบเมนูด้านล่างสุดเท่
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today),
-            label: 'Upcoming',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.star),
-            label: 'Top Rated',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Upcoming'),
+          BottomNavigationBarItem(icon: Icon(Icons.star), label: 'Top Rated'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.deepOrange,
@@ -114,4 +100,37 @@ class _MovieListState extends State<MovieList> {
       ),
     );
   }
+}
+
+class MovieSearchDelegate extends SearchDelegate {
+  HttpHelper helper = HttpHelper();
+
+  @override
+  List<Widget>? buildActions(BuildContext context) => [IconButton(icon: const Icon(Icons.clear), onPressed: () => query = '')];
+
+  @override
+  Widget? buildLeading(BuildContext context) => IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => close(context, null));
+
+  @override
+  Widget buildResults(BuildContext context) {
+    return FutureBuilder(
+        future: helper.findMovies(query),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          List<Movie> found = snapshot.data as List<Movie>;
+          return ListView.builder(
+              itemCount: found.length,
+              itemBuilder: (context, index) {
+                return ListTile(
+                  title: Text(found[index].title ?? ''),
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => MovieDetail(found[index])));
+                  },
+                );
+              });
+        });
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) => const Center(child: Text("Search movies..."));
 }

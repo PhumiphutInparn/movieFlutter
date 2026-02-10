@@ -7,49 +7,51 @@ class HttpHelper {
   final String urlKey = 'api_key=8d07879b26b999decb0cb26b4933c985';
   final String urlBase = 'https://api.themoviedb.org/3/movie';
   final String urlUpcoming = '/upcoming?';
-  final String urlTopRated = '/top_rated?'; // เพิ่มตัวแปรใหม่
-  final String urlLanguage = '&language=en-US';
+  final String urlTopRated = '/top_rated?';
+  final String urlSearchBase = 'https://api.themoviedb.org/3/search/movie?';
 
   Future<List<Movie>?> getUpcoming() async {
-    final String upcoming = urlBase + urlUpcoming + urlKey + urlLanguage;
-    http.Response result = await http.get(Uri.parse(upcoming));
-    if (result.statusCode == HttpStatus.ok) {
-      final jsonResponse = json.decode(result.body);
-      final moviesMap = jsonResponse['results'];
-      List<Movie> movies = List<Movie>.from(moviesMap.map((i) => Movie.fromJson(i)));
-      return movies;
-    } else {
-      return null;
-    }
+    final String url = '$urlBase$urlUpcoming$urlKey&language=en-US';
+    return _fetch(url);
   }
 
-  // เพิ่มฟังก์ชันดึงหนัง Top Rated
   Future<List<Movie>?> getTopRated() async {
-    final String topRated = urlBase + urlTopRated + urlKey + urlLanguage;
-    http.Response result = await http.get(Uri.parse(topRated));
-    if (result.statusCode == HttpStatus.ok) {
-      final jsonResponse = json.decode(result.body);
-      final moviesMap = jsonResponse['results'];
-      List<Movie> movies = List<Movie>.from(moviesMap.map((i) => Movie.fromJson(i)));
-      return movies;
-    } else {
+    final String url = '$urlBase$urlTopRated$urlKey&language=en-US';
+    return _fetch(url);
+  }
+
+  Future<List<Movie>?> findMovies(String title) async {
+    final String url = '$urlSearchBase$urlKey&query=$title';
+    return _fetch(url);
+  }
+
+  Future<List<Movie>?> _fetch(String url) async {
+    try {
+      http.Response result = await http.get(Uri.parse(url));
+      if (result.statusCode == HttpStatus.ok) {
+        final jsonResponse = json.decode(result.body);
+        final moviesMap = jsonResponse['results'];
+        List<Movie> movies =
+            List<Movie>.from(moviesMap.map((i) => Movie.fromJson(i)));
+        return movies;
+      }
+      return null;
+    } catch (e) {
       return null;
     }
   }
 
-  // ฟังก์ชัน Search อันเดิม
-  Future<List<Movie>?> findMovies(String title) async {
-    final String urlSearchBase = 'https://api.themoviedb.org/3/search/movie?api_key=';
-    final String query = '&query=$title';
-    final String urlSearch = urlSearchBase + '8d07879b26b999decb0cb26b4933c985' + query;
-
-    http.Response result = await http.get(Uri.parse(urlSearch));
-    if (result.statusCode == HttpStatus.ok) {
-      final jsonResponse = json.decode(result.body);
-      final moviesMap = jsonResponse['results'];
-      List<Movie> movies = List<Movie>.from(moviesMap.map((i) => Movie.fromJson(i)));
-      return movies;
-    } else {
+  Future<List<Map<String, dynamic>>?> getCast(int movieId) async {
+    final String urlCast = '$urlBase/$movieId/credits?$urlKey';
+    try {
+      http.Response result = await http.get(Uri.parse(urlCast));
+      if (result.statusCode == HttpStatus.ok) {
+        final jsonResponse = json.decode(result.body);
+        final castMap = jsonResponse['cast'];
+        return List<Map<String, dynamic>>.from(castMap);
+      }
+      return null;
+    } catch (e) {
       return null;
     }
   }
